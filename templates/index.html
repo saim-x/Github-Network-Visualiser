@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Network Graph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #FF3366; /* Accent color */
+            --secondary: #6C63FF; /* Accent color */
+            --dark: #121212; /* Dark background */
+            --light: #E0E0E0; /* Light text */
+            --grey: #1E1E1E; /* Grey background */
+            --shadow: 0 4px 8px rgba(0, 0, 0, 0.5); /* Shadow effect */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark); /* Dark background */
+            color: var(--light); /* Light text */
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            margin: 0 0 30px 0;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+        }
+
+        .search-box {
+            background: var(--grey); /* Grey background */
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+
+        input {
+            flex: 1;
+            padding: 15px 25px;
+            border: 2px solid #444; /* Dark border */
+            border-radius: 12px;
+            font-size: 16px;
+            background: #222; /* Dark input background */
+            color: var(--light); /* Light text */
+            transition: all 0.3s;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.6); /* Light placeholder */
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 51, 102, 0.2);
+        }
+
+        button {
+            padding: 15px 30px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 51, 102, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .controls {
+            background: var(--grey); /* Grey background */
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .layout-select {
+            padding: 12px 20px;
+            border: 2px solid #444; /* Dark border */
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            background: #222; /* Dark select background */
+            color: var(--light); /* Light text */
+            cursor: pointer;
+        }
+
+        #cy {
+            flex: 1;
+            height: 200vh; /* Increase height to maximum */
+            border-radius: 20px;
+            overflow: hidden;
+            background: #222; /* Dark graph background */
+            border: 1px solid #444; /* Dark border */
+            box-shadow: var(--shadow);
+        }
+
+        .legend {
+            background: var(--grey); /* Grey background */
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+            color: var(--light); /* Light text */
+        }
+
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+        }
+
+        .zoom-controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .zoom-controls button {
+            width: 50px;
+            height: 50px;
+            border-radius: 15px;
+            font-size: 24px;
+            background: var(--grey); /* Grey background */
+            color: var(--light); /* Light text */
+            border: 2px solid var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .node-info {
+            background: var(--grey); /* Grey background */
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+            min-width: 250px;
+            color: var(--light); /* Light text */
+        }
+
+        .node-info h3 {
+            font-size: 1.5rem;
+            margin: 0 0 15px 0;
+            color: var(--primary);
+        }
+
+        .error-message {
+            background: var(--primary);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: none;
+            margin-left: 10px;
+            align-self: center;
+            color: var(--light); /* Light text */
+        }
+
+        .node-info {
+            position: absolute;
+            background: var(--grey); /* Grey background */
+            border: 1px solid #444; /* Dark border */
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: var(--shadow);
+            display: none;
+            max-width: 300px;
+            z-index: 1000;
+            min-width: 200px;
+            font-size: 14px;
+        }
+
+        .node-info h3 {
+            margin: 0 0 10px 0;
+            color: var(--primary);
+        }
+
+        .controls {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .legend {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #444; /* Dark border */
+            border-radius: 5px;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 1000;
+        }
+
+        .zoom-controls button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 18px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--grey); /* Grey background */
+            color: var(--light); /* Light text */
+            border: 1px solid #444; /* Dark border */
+            box-shadow: var(--shadow);
+        }
+
+        .zoom-controls button:hover {
+            background: #333; /* Darker grey on hover */
+        }
+
+        .controls button {
+            background: var(--grey); /* Grey background */
+            color: var(--light); /* Light text */
+            border: 1px solid #444; /* Dark border */
+            transition: all 0.2s;
+        }
+
+        .controls button:hover {
+            background: #333; /* Darker grey on hover */
+            border-color: #666; /* Lighter grey border on hover */
+        }
+
+        .layout-select {
+            padding: 10px;
+            border: 1px solid #444; /* Dark border */
+            border-radius: 4px;
+            background: #222; /* Dark select background */
+            color: var(--light); /* Light text */
+            cursor: pointer;
+        }
+        
+        .edge-followers {
+            opacity: 0.6;
+        }
+        
+        .edge-mutuals {
+            opacity: 1;
+        }
+        
+        .node-central {
+            border-color: #238636 !important;
+        }
+        
+        .node-influential {
+            border-color: #ff9800 !important;
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        
+        .network-stats {
+            background: var(--grey);
+            padding: 20px;
+            border-radius: 20px;
+            margin: 20px 0;
+            color: var(--light);
+        }
+
+        .network-stats h3 {
+            color: var(--primary);
+            margin-top: 0;
+        }
+
+        .influencer {
+            border-color: #ff9800 !important;
+            border-width: 4px !important;
+        }
+
+        .connector {
+            border-color: #238636 !important;
+            border-width: 4px !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>GitHub Network Graph</h1>
+        <div class="search-box">
+            <div class="input-group">
+                <input type="text" id="username" placeholder="Enter GitHub username">
+                <button onclick="loadGraph()" id="searchButton">Visualize Network</button>
+            </div>
+            <div class="input-group">
+                <input type="text" id="githubToken" class="token-input" placeholder="Optional: Enter GitHub API token">
+                <button onclick="updateToken()" class="secondary">Update Token</button>
+            </div>
+            <span class="loading" id="loading">Loading...</span>
+        </div>
+        <div class="error-message" id="errorMessage"></div>
+        <div class="controls">
+            <button onclick="resetZoom()">Reset View</button>
+            <select id="layoutSelect" onchange="changeLayout()" class="layout-select">
+                <option value="cose">Organic</option>
+                <option value="concentric">Followers-based</option>
+                <option value="breadthfirst">Hierarchical</option>
+                <option value="circle">Circular</option>
+                <option value="grid">Grid</option>
+            </select>
+            <button onclick="exportAsPNG()">Export as PNG</button>
+            <button onclick="exportAsPDF()">Export as PDF</button>
+        </div>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #238636"></div>
+                <span>Central User</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff9800"></div>
+                <span>Influential Users</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #99a4b7; opacity: 1"></div>
+                <span>Mutual Connections</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #99a4b7; opacity: 0.6"></div>
+                <span>One-way Connections</span>
+            </div>
+        </div>
+        <div id="cy"></div>
+        <div class="node-info" id="nodeInfo"></div>
+        <div class="zoom-controls">
+            <button onclick="zoomIn()">+</button>
+            <button onclick="zoomOut()">-</button>
+        </div>
+    </div>
+
+    <script>
+        let cy = null;
+        let currentLayout = 'cose';
+        let userToken = null;
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function resetZoom() {
+            if (cy) {
+                cy.fit();
+                cy.center();
+            }
+        }
+
+        function changeLayout() {
+            if (!cy) return;
+            
+            const layoutName = document.getElementById('layoutSelect').value;
+            let layoutOptions = {
+                name: layoutName,
+                animate: true,
+                animationDuration: 500,
+                fit: true,
+                padding: 30
+            };
+            
+            switch(layoutName) {
+                case 'concentric':
+                    layoutOptions = {
+                        ...layoutOptions,
+                        concentric: function(node) {
+                            return node.data('followers');
+                        },
+                        levelWidth: function() {
+                            return 1;
+                        },
+                        minNodeSpacing: 50
+                    };
+                    break;
+                    
+                case 'breadthfirst':
+                    layoutOptions = {
+                        ...layoutOptions,
+                        directed: true,
+                        roots: cy.nodes().filter(node => node.data('depth') === 0),
+                        spacingFactor: 1.5
+                    };
+                    break;
+                    
+                case 'cose':
+                    layoutOptions = {
+                        ...layoutOptions,
+                        idealEdgeLength: 100,
+                        nodeOverlap: 20,
+                        refresh: 20,
+                        randomize: false,
+                        componentSpacing: 100,
+                        nodeRepulsion: 400000,
+                        edgeElasticity: 100,
+                        nestingFactor: 5,
+                        gravity: 80
+                    };
+                    break;
+            }
+            
+            const layout = cy.layout(layoutOptions);
+            layout.run();
+        }
+
+        function showNodeInfo(node, event) {
+            const nodeInfo = document.getElementById('nodeInfo');
+            const data = node.data();
+            
+            nodeInfo.innerHTML = `
+                <h3>${data.name || data.label}</h3>
+                <p><strong>Followers:</strong> ${data.followers}</p>
+                <p><strong>Following:</strong> ${data.following}</p>
+                <p><strong>Repos:</strong> ${data.repos}</p>
+                ${data.company ? `<p><strong>Company:</strong> ${data.company}</p>` : ''}
+                ${data.location ? `<p><strong>Location:</strong> ${data.location}</p>` : ''}
+            `;
+            
+            nodeInfo.style.display = 'block';
+            nodeInfo.style.left = event.renderedPosition.x + 'px';
+            nodeInfo.style.top = event.renderedPosition.y + 'px';
+        }
+
+        function hideNodeInfo() {
+            document.getElementById('nodeInfo').style.display = 'none';
+        }
+
+        function updateToken() {
+            const tokenInput = document.getElementById('githubToken');
+            userToken = tokenInput.value.trim();
+            if (userToken) {
+                showError('Token updated successfully!');
+                // Clear the input for security
+                tokenInput.value = '';
+            } else {
+                userToken = null;
+                showError('Using default token');
+            }
+        }
+
+        function loadGraph() {
+            const username = document.getElementById('username').value;
+            const loading = document.getElementById('loading');
+            const button = document.getElementById('searchButton');
+            const errorDiv = document.getElementById('errorMessage');
+            
+            if (!username) {
+                showError('Please enter a GitHub username');
+                return;
+            }
+            
+            errorDiv.style.display = 'none';
+            loading.style.display = 'block';
+            button.disabled = true;
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            if (userToken) {
+                formData.append('token', userToken);
+            }
+            
+            fetch('/graph', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                renderGraph(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('An error occurred while fetching the data. Please try again.');
+            })
+            .finally(() => {
+                loading.style.display = 'none';
+                button.disabled = false;
+            });
+        }
+
+        function renderGraph(graphData) {
+            if (cy) {
+                cy.destroy();
+            }
+
+            // Find influential nodes (users with high follower counts)
+            const followerCounts = graphData.nodes.map(node => node.data.followers || 0);
+            const followerThreshold = Math.max(...followerCounts) * 0.5; // 50% of max followers
+
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                elements: {
+                    nodes: graphData.nodes,
+                    edges: graphData.edges
+                },
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-image': 'data(avatar)',
+                            'background-fit': 'cover',
+                            'width': 'mapData(followers, 0, 1000, 30, 80)',
+                            'height': 'mapData(followers, 0, 1000, 30, 80)',
+                            'label': 'data(label)',
+                            'text-valign': 'bottom',
+                            'text-margin-y': 6,
+                            'font-size': 12,
+                            'text-outline-width': 2,
+                            'text-outline-color': '#fff',
+                            'border-width': 3,
+                            'border-color': '#666'
+                        }
+                    },
+                    {
+                        selector: 'node[depth = 0]',
+                        style: {
+                            'border-color': '#238636',
+                            'border-width': 4
+                        }
+                    },
+                    {
+                        selector: `node[followers >= ${followerThreshold}][depth > 0]`,
+                        style: {
+                            'border-color': '#ff9800',
+                            'border-width': 4
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#99a4b7',
+                            'curve-style': 'bezier',
+                            'target-arrow-shape': 'triangle',
+                            'target-arrow-color': '#99a4b7',
+                            'arrow-scale': 1.5,
+                            'opacity': 0.6
+                        }
+                    },
+                    {
+                        selector: 'edge.mutual',
+                        style: {
+                            'opacity': 1,
+                            'line-color': '#238636',
+                            'target-arrow-color': '#238636'
+                        }
+                    }
+                ],
+                layout: {
+                    name: currentLayout,
+                    idealEdgeLength: 100,
+                    nodeOverlap: 20,
+                    refresh: 20,
+                    fit: true,
+                    padding: 30,
+                    randomize: false,
+                    componentSpacing: 100,
+                    nodeRepulsion: 400000,
+                    edgeElasticity: 100,
+                    nestingFactor: 5,
+                    gravity: 80,
+                    numIter: 1000,
+                    initialTemp: 200,
+                    coolingFactor: 0.95,
+                    minTemp: 1.0
+                },
+                minZoom: 0.2,
+                maxZoom: 3,
+                wheelSensitivity: 0.2,
+                zoomingEnabled: true,
+                userZoomingEnabled: true,
+                panningEnabled: true,
+                userPanningEnabled: true,
+                boxSelectionEnabled: false,
+                selectionType: 'single'
+            });
+
+            // Identify mutual connections
+            cy.edges().forEach(edge => {
+                const source = edge.source().id();
+                const target = edge.target().id();
+                const oppositeEdge = cy.edges(`[source = "${target}"][target = "${source}"]`);
+                
+                if (oppositeEdge.length > 0) {
+                    edge.addClass('mutual');
+                    oppositeEdge.addClass('mutual');
+                }
+            });
+
+            // Update the node styles based on analysis
+            cy.nodes().forEach(node => {
+                const data = node.data();
+                
+                // Style based on influence score
+                if (data.is_influencer) {
+                    node.addClass('influencer');
+                }
+                
+                // Style based on connection type
+                if (data.connection_type === 'mutual') {
+                    node.addClass('connector');
+                }
+                
+                // Scale node size based on final score
+                const size = 30 + (data.final_score * 50);
+                node.style({
+                    'width': size,
+                    'height': size
+                });
+            });
+
+            cy.on('mouseover', 'node', function(evt) {
+                evt.target.style('border-width', 6);
+                showNodeInfo(evt.target, evt.renderedPosition);
+            });
+
+            cy.on('mouseout', 'node', function(evt) {
+                evt.target.style('border-width', 3);
+                hideNodeInfo();
+            });
+
+            cy.on('tap', 'node', function(evt) {
+                const node = evt.target;
+                window.open(`https://github.com/${node.id()}`, '_blank');
+            });
+
+            cy.on('mousewheel', function(evt) {
+                evt.preventDefault();
+            });
+
+            cy.on('pan', function() {
+                cy.nodes().forEach(function(node) {
+                    node.style('transition-property', 'position');
+                    node.style('transition-duration', '0.1s');
+                });
+            });
+
+            cy.fit();
+            cy.center();
+
+            // Add network stats to the page
+            const stats = graphData.stats;
+            const statsHtml = `
+                <div class="network-stats">
+                    <h3>Network Analysis</h3>
+                    <p>Total Users: ${stats.total_users}</p>
+                    <p>Total Connections: ${stats.total_connections}</p>
+                    <p>Average Followers: ${Math.round(stats.avg_followers)}</p>
+                    <p>Network Density: ${(stats.network_density * 100).toFixed(1)}%</p>
+                    <p>Mutual Connections: ${(stats.mutual_connection_ratio * 100).toFixed(1)}%</p>
+                </div>
+            `;
+
+            document.querySelector('.legend').insertAdjacentHTML('afterend', statsHtml);
+        }
+
+        function zoomIn() {
+            if (cy) {
+                cy.zoom({
+                    level: cy.zoom() * 1.2,
+                    renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+                });
+            }
+        }
+
+        function zoomOut() {
+            if (cy) {
+                cy.zoom({
+                    level: cy.zoom() * 0.8,
+                    renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+                });
+            }
+        }
+
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadGraph();
+            }
+        });
+
+        function exportAsPNG() {
+            if (!cy) {
+                showError('No graph to export');
+                return;
+            }
+
+            const container = document.getElementById('cy');
+            html2canvas(container, {
+                scale: 2, // Increase scale for higher quality
+                useCORS: true, // Handle CORS issues
+                logging: true, // Enable logging for debugging
+                allowTaint: true // Allow tainted canvas
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'github_network.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }).catch(err => {
+                console.error('Error exporting as PNG:', err);
+                showError('Failed to export as PNG');
+            });
+        }
+
+        function exportAsPDF() {
+            if (!cy) {
+                showError('No graph to export');
+                return;
+            }
+
+            const container = document.getElementById('cy');
+            html2canvas(container, {
+                scale: 2, // Increase scale for higher quality
+                useCORS: true, // Handle CORS issues
+                logging: true, // Enable logging for debugging
+                allowTaint: true // Allow tainted canvas
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF('landscape');
+                const imgWidth = pdf.internal.pageSize.getWidth();
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save('github_network.pdf');
+            }).catch(err => {
+                console.error('Error exporting as PDF:', err);
+                showError('Failed to export as PDF');
+            });
+        }
+    </script>
+</body>
+</html>
